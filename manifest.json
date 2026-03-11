@@ -1,0 +1,18 @@
+{
+  "name": "Vogelwaarnemingen",
+  "short_name": "Vogels",
+  "description": "Log je vogelwaarnemingen in West-Europa",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a3a2a",
+  "theme_color": "#1a3a2a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
