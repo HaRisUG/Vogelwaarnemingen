@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.svg">
 <title>Vogelwaarnemingen</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -22,10 +21,8 @@
     --mist: #c8dfc0;
     --cream: #f5f0e8;
     --bark: #8b6f47;
-    --sky: #5b8fa8;
     --dawn: #e8c98a;
-    --text: #1a2a1e;
-    --text-soft: #4a5e4f;
+    --danger: #e57373;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,22 +52,56 @@
     z-index: 1;
     max-width: 480px;
     margin: 0 auto;
-    padding: 0 0 80px 0;
+    padding: 0 0 90px 0;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 20px;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: rgba(10,25,16,0.6);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #888;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.online { background: var(--leaf); box-shadow: 0 0 6px var(--leaf); }
+  .status-dot.offline { background: var(--bark); }
+  .status-dot.syncing { background: var(--dawn); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--danger); }
+  .status-text { color: var(--mist); opacity: 0.7; }
+
+  /* Pending badge */
+  .pending-badge {
+    margin-left: auto;
+    background: rgba(139,111,71,0.3);
+    color: var(--dawn);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    display: none;
+  }
+  .pending-badge.show { display: block; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
   }
 
   header {
-    padding: 24px 20px 16px;
+    padding: 16px 20px 16px;
     background: linear-gradient(180deg, rgba(10,25,16,0.8) 0%, transparent 100%);
     backdrop-filter: blur(4px);
     position: sticky;
     top: 0;
     z-index: 100;
-  }
-
-  .header-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
   }
 
   .logo { display: flex; align-items: center; gap: 10px; }
@@ -93,7 +124,7 @@
   }
 
   .list-selector {
-    margin: 16px 20px 0;
+    margin: 14px 20px 0;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(200,223,192,0.15);
     border-radius: 12px;
@@ -141,15 +172,13 @@
   }
   .btn-icon:active { transform: scale(0.93); background: rgba(255,255,255,0.15); }
 
-  .search-section { padding: 16px 20px 0; }
-
+  .search-section { padding: 14px 20px 0; }
   .search-wrap { position: relative; }
 
   .search-icon {
     position: absolute;
     left: 12px; top: 50%; transform: translateY(-50%);
-    color: var(--mist);
-    opacity: 0.6;
+    color: var(--mist); opacity: 0.6;
     font-size: 1rem;
     pointer-events: none;
   }
@@ -170,22 +199,20 @@
   .search-input:focus { border-color: rgba(107,168,122,0.5); }
 
   .bird-list {
-    margin: 12px 20px 0;
-    max-height: 280px;
+    margin: 10px 20px 0;
+    max-height: 260px;
     overflow-y: auto;
     border-radius: 12px;
     background: rgba(0,0,0,0.2);
     border: 1px solid rgba(200,223,192,0.1);
   }
-
   .bird-list::-webkit-scrollbar { width: 4px; }
-  .bird-list::-webkit-scrollbar-track { background: transparent; }
   .bird-list::-webkit-scrollbar-thumb { background: rgba(200,223,192,0.3); border-radius: 2px; }
 
   .bird-item {
     display: flex;
     align-items: center;
-    padding: 11px 14px;
+    padding: 10px 14px;
     cursor: pointer;
     border-bottom: 1px solid rgba(200,223,192,0.07);
     transition: background 0.15s;
@@ -195,27 +222,9 @@
   .bird-item:active { background: rgba(107,168,122,0.15); }
 
   .bird-emoji { font-size: 1.2rem; flex-shrink: 0; }
-
   .bird-names { flex: 1; min-width: 0; }
-
-  .bird-nl {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--cream);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .bird-sci {
-    font-size: 0.72rem;
-    color: var(--mist);
-    opacity: 0.65;
-    font-style: italic;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .bird-nl { font-size: 0.95rem; font-weight: 600; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bird-sci { font-size: 0.72rem; color: var(--mist); opacity: 0.65; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .bird-log-btn {
     background: var(--fern);
@@ -234,95 +243,76 @@
   .bird-log-btn:active { transform: scale(0.92); background: var(--moss); }
 
   .section-header {
-    padding: 20px 20px 10px;
+    padding: 18px 20px 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.1rem;
-    color: var(--dawn);
-  }
+  .section-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--dawn); }
 
   .sighting-count {
-    font-size: 0.75rem;
-    color: var(--mist);
-    opacity: 0.7;
+    font-size: 0.75rem; color: var(--mist); opacity: 0.7;
     background: rgba(255,255,255,0.07);
-    padding: 3px 9px;
-    border-radius: 20px;
+    padding: 3px 9px; border-radius: 20px;
   }
 
-  .sightings-list {
-    padding: 0 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .sightings-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
 
   .sighting-card {
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(200,223,192,0.12);
     border-radius: 10px;
-    padding: 12px 14px;
+    padding: 11px 14px;
     display: flex;
     align-items: flex-start;
     gap: 10px;
     animation: slideIn 0.3s ease;
+    position: relative;
   }
+  .sighting-card.pending { border-color: rgba(139,111,71,0.4); }
 
   @keyframes slideIn {
     from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  .sighting-emoji { font-size: 1.4rem; flex-shrink: 0; margin-top: 1px; }
+  .sighting-emoji { font-size: 1.3rem; flex-shrink: 0; margin-top: 1px; }
   .sighting-info { flex: 1; min-width: 0; }
 
-  .sighting-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--cream);
-  }
+  .sighting-name { font-weight: 600; font-size: 0.95rem; color: var(--cream); }
 
   .sighting-meta {
-    font-size: 0.75rem;
-    color: var(--mist);
-    opacity: 0.7;
-    margin-top: 3px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    font-size: 0.74rem; color: var(--mist); opacity: 0.7;
+    margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px;
   }
 
   .sighting-list-badge {
     background: rgba(107,168,122,0.25);
     color: var(--leaf);
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-size: 0.7rem;
-    font-weight: 600;
+    padding: 1px 7px; border-radius: 10px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+
+  .sync-indicator {
+    font-size: 0.65rem;
+    color: var(--dawn);
+    opacity: 0.7;
   }
 
   .sighting-delete {
-    background: none;
-    border: none;
+    background: none; border: none;
     color: rgba(200,223,192,0.3);
-    cursor: pointer;
-    font-size: 1rem;
-    padding: 2px;
-    transition: color 0.2s;
-    flex-shrink: 0;
+    cursor: pointer; font-size: 1rem; padding: 2px;
+    transition: color 0.2s; flex-shrink: 0;
   }
-  .sighting-delete:active { color: #e57373; }
+  .sighting-delete:active { color: var(--danger); }
 
   .bottom-bar {
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    padding: 12px 20px;
-    background: linear-gradient(0deg, rgba(10,25,16,0.95) 0%, rgba(10,25,16,0.8) 100%);
+    padding: 10px 20px 14px;
+    background: linear-gradient(0deg, rgba(10,25,16,0.97) 0%, rgba(10,25,16,0.8) 100%);
     backdrop-filter: blur(8px);
     display: flex;
     gap: 10px;
@@ -332,35 +322,25 @@
   .btn-export {
     flex: 1;
     background: linear-gradient(135deg, var(--bark), #7a5e3a);
-    border: none;
-    border-radius: 10px;
+    border: none; border-radius: 10px;
     color: var(--cream);
     padding: 13px;
     font-family: 'Source Sans 3', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 600;
+    font-size: 0.9rem; font-weight: 600;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
     transition: all 0.2s;
-    letter-spacing: 0.02em;
   }
   .btn-export:active { transform: scale(0.97); opacity: 0.9; }
 
   .modal-overlay {
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     background: rgba(0,0,0,0.7);
     z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     padding: 20px;
     backdrop-filter: blur(4px);
-    opacity: 0;
-    pointer-events: none;
+    opacity: 0; pointer-events: none;
     transition: opacity 0.2s;
   }
   .modal-overlay.open { opacity: 1; pointer-events: all; }
@@ -368,10 +348,8 @@
   .modal {
     background: #1e3d2a;
     border: 1px solid rgba(200,223,192,0.2);
-    border-radius: 16px;
-    padding: 24px;
-    width: 100%;
-    max-width: 340px;
+    border-radius: 16px; padding: 24px;
+    width: 100%; max-width: 340px;
     transform: translateY(20px);
     transition: transform 0.2s;
   }
@@ -379,22 +357,17 @@
 
   .modal h2 {
     font-family: 'Playfair Display', serif;
-    font-size: 1.2rem;
-    margin-bottom: 16px;
-    color: var(--dawn);
+    font-size: 1.2rem; margin-bottom: 16px; color: var(--dawn);
   }
 
   .modal-input {
     width: 100%;
     background: rgba(0,0,0,0.3);
     border: 1px solid rgba(200,223,192,0.2);
-    border-radius: 8px;
-    color: var(--cream);
+    border-radius: 8px; color: var(--cream);
     padding: 10px 14px;
     font-family: 'Source Sans 3', sans-serif;
-    font-size: 1rem;
-    outline: none;
-    margin-bottom: 16px;
+    font-size: 1rem; outline: none; margin-bottom: 16px;
   }
   .modal-input::placeholder { color: rgba(200,223,192,0.35); }
   .modal-input:focus { border-color: rgba(107,168,122,0.5); }
@@ -405,94 +378,71 @@
     flex: 1;
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(200,223,192,0.15);
-    border-radius: 8px;
-    color: var(--mist);
+    border-radius: 8px; color: var(--mist);
     padding: 10px;
     font-family: 'Source Sans 3', sans-serif;
-    font-size: 0.95rem;
-    cursor: pointer;
+    font-size: 0.95rem; cursor: pointer;
   }
 
   .btn-confirm {
-    flex: 1;
-    background: var(--fern);
-    border: none;
-    border-radius: 8px;
-    color: white;
+    flex: 1; background: var(--fern);
+    border: none; border-radius: 8px; color: white;
     padding: 10px;
     font-family: 'Source Sans 3', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
+    font-size: 0.95rem; font-weight: 600; cursor: pointer;
   }
 
   .toast {
     position: fixed;
-    bottom: 90px;
-    left: 50%;
+    bottom: 90px; left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: var(--fern);
-    color: white;
-    padding: 10px 20px;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    opacity: 0;
-    transition: all 0.3s;
-    pointer-events: none;
-    white-space: nowrap;
-    z-index: 300;
+    background: var(--fern); color: white;
+    padding: 10px 20px; border-radius: 20px;
+    font-size: 0.9rem; font-weight: 600;
+    opacity: 0; transition: all 0.3s;
+    pointer-events: none; white-space: nowrap; z-index: 300;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error-toast { background: #c0392b; }
 
   .empty-state {
-    text-align: center;
-    padding: 30px 20px;
-    color: var(--mist);
-    opacity: 0.45;
-    font-size: 0.9rem;
+    text-align: center; padding: 28px 20px;
+    color: var(--mist); opacity: 0.45; font-size: 0.9rem;
   }
 
   .no-results {
-    padding: 20px;
-    text-align: center;
-    color: var(--mist);
-    opacity: 0.5;
-    font-size: 0.85rem;
+    padding: 18px; text-align: center;
+    color: var(--mist); opacity: 0.5; font-size: 0.85rem;
   }
 
-  .offline-banner {
-    background: rgba(139,111,71,0.3);
-    border-bottom: 1px solid rgba(139,111,71,0.4);
-    padding: 6px 20px;
-    font-size: 0.75rem;
-    color: var(--dawn);
-    text-align: center;
-    display: none;
+  .loading-state {
+    text-align: center; padding: 24px;
+    color: var(--mist); opacity: 0.5; font-size: 0.85rem;
   }
-  .offline-banner.show { display: block; }
 </style>
 </head>
 <body>
 
-<div class="offline-banner" id="offlineBanner">📵 Offline — app werkt gewoon door</div>
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span class="status-text" id="statusText">Verbinden...</span>
+  <span class="pending-badge" id="pendingBadge"></span>
+</div>
 
 <div class="app">
   <header>
-    <div class="header-top">
-      <div class="logo">
-        <svg class="logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18" cy="18" r="18" fill="rgba(74,124,89,0.3)"/>
-          <path d="M8 24 Q14 16 20 18 Q24 8 30 10" stroke="#6ba87a" stroke-width="2" stroke-linecap="round" fill="none"/>
-          <ellipse cx="26" cy="12" rx="5" ry="3.5" fill="#4a7c59" transform="rotate(-30 26 12)"/>
-          <circle cx="29" cy="10" r="1" fill="#c8dfc0"/>
-          <path d="M24 14 L21 17" stroke="#4a7c59" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M8 24 Q10 26 13 25" stroke="#6ba87a" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-        </svg>
-        <div>
-          <h1>Vogelwaarnemingen</h1>
-          <div class="subtitle">West-Europa</div>
-        </div>
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="18" r="18" fill="rgba(74,124,89,0.3)"/>
+        <path d="M8 24 Q14 16 20 18 Q24 8 30 10" stroke="#6ba87a" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <ellipse cx="26" cy="12" rx="5" ry="3.5" fill="#4a7c59" transform="rotate(-30 26 12)"/>
+        <circle cx="29" cy="10" r="1" fill="#c8dfc0"/>
+        <path d="M24 14 L21 17" stroke="#4a7c59" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M8 24 Q10 26 13 25" stroke="#6ba87a" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
+      <div>
+        <h1>Vogelwaarnemingen</h1>
+        <div class="subtitle">West-Europa</div>
       </div>
     </div>
 
@@ -522,7 +472,9 @@
     <span class="sighting-count" id="sightingCount">0</span>
   </div>
 
-  <div class="sightings-list" id="sightingsList"></div>
+  <div class="sightings-list" id="sightingsList">
+    <div class="loading-state">Waarnemingen laden...</div>
+  </div>
 </div>
 
 <div class="bottom-bar">
@@ -547,187 +499,114 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://dsppbsqkoiwdhbzxtxtl.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzcHBic3Frb2l3ZGhienh0eHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MzE4MjAsImV4cCI6MjA4OTUwNzgyMH0.Cx9R4Ht1qc6t2NiC6X21PlQMnKGwaonxLG6RJ5vHHAw';
+const HEADERS = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+
+async function sbFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: { ...HEADERS, ...(options.headers || {}) },
+    ...options
+  });
+  if (!res.ok) { const err = await res.text(); throw new Error(err); }
+  return res.status === 204 ? null : res.json();
+}
+
+// ─── BIRDS DATA ───────────────────────────────────────────────────────────────
 const ALL_BIRDS = [
-  {nl:"Merel",sci:"Turdus merula",em:"🐦"},
-  {nl:"Koolmees",sci:"Parus major",em:"🐦"},
-  {nl:"Pimpelmees",sci:"Cyanistes caeruleus",em:"🐦"},
-  {nl:"Roodborst",sci:"Erithacus rubecula",em:"🐦"},
-  {nl:"Huismus",sci:"Passer domesticus",em:"🐦"},
-  {nl:"Ringmus",sci:"Passer montanus",em:"🐦"},
-  {nl:"Vink",sci:"Fringilla coelebs",em:"🐦"},
-  {nl:"Groenling",sci:"Chloris chloris",em:"🐦"},
-  {nl:"Putter",sci:"Carduelis carduelis",em:"🐦"},
-  {nl:"Kneu",sci:"Linaria cannabina",em:"🐦"},
-  {nl:"Sijsje",sci:"Spinus spinus",em:"🐦"},
-  {nl:"Keep",sci:"Fringilla montifringilla",em:"🐦"},
-  {nl:"Goudvink",sci:"Pyrrhula pyrrhula",em:"🐦"},
-  {nl:"Appelvink",sci:"Coccothraustes coccothraustes",em:"🐦"},
-  {nl:"Gaai",sci:"Garrulus glandarius",em:"🐦"},
-  {nl:"Ekster",sci:"Pica pica",em:"🐦"},
-  {nl:"Kauw",sci:"Corvus monedula",em:"🐦"},
-  {nl:"Roek",sci:"Corvus frugilegus",em:"🐦"},
-  {nl:"Zwarte Kraai",sci:"Corvus corone",em:"🐦"},
-  {nl:"Bonte Kraai",sci:"Corvus cornix",em:"🐦"},
-  {nl:"Raaf",sci:"Corvus corax",em:"🐦"},
-  {nl:"Spreeuw",sci:"Sturnus vulgaris",em:"🐦"},
-  {nl:"Zanglijster",sci:"Turdus philomelos",em:"🐦"},
-  {nl:"Kramsvogel",sci:"Turdus pilaris",em:"🐦"},
-  {nl:"Koperwiek",sci:"Turdus iliacus",em:"🐦"},
-  {nl:"Grote Lijster",sci:"Turdus viscivorus",em:"🐦"},
-  {nl:"Beflijster",sci:"Turdus torquatus",em:"🐦"},
-  {nl:"Nachtegaal",sci:"Luscinia megarhynchos",em:"🐦"},
-  {nl:"Blauwborst",sci:"Luscinia svecica",em:"🐦"},
-  {nl:"Zwarte Roodstaart",sci:"Phoenicurus ochruros",em:"🐦"},
-  {nl:"Gekraagde Roodstaart",sci:"Phoenicurus phoenicurus",em:"🐦"},
-  {nl:"Tapuit",sci:"Oenanthe oenanthe",em:"🐦"},
-  {nl:"Paapje",sci:"Saxicola rubetra",em:"🐦"},
-  {nl:"Roodborsttapuit",sci:"Saxicola rubicola",em:"🐦"},
-  {nl:"Heggenmus",sci:"Prunella modularis",em:"🐦"},
-  {nl:"Grasmus",sci:"Sylvia communis",em:"🐦"},
-  {nl:"Tuinfluiter",sci:"Sylvia borin",em:"🐦"},
-  {nl:"Zwartkop",sci:"Sylvia atricapilla",em:"🐦"},
-  {nl:"Braamsluiper",sci:"Sylvia curruca",em:"🐦"},
-  {nl:"Spotvogel",sci:"Hippolais icterina",em:"🐦"},
-  {nl:"Kleine Karekiet",sci:"Acrocephalus scirpaceus",em:"🐦"},
-  {nl:"Grote Karekiet",sci:"Acrocephalus arundinaceus",em:"🐦"},
-  {nl:"Bosrietzanger",sci:"Acrocephalus palustris",em:"🐦"},
-  {nl:"Sprinkhaanzanger",sci:"Locustella naevia",em:"🐦"},
-  {nl:"Tjiftjaf",sci:"Phylloscopus collybita",em:"🐦"},
-  {nl:"Fitis",sci:"Phylloscopus trochilus",em:"🐦"},
-  {nl:"Goudhaan",sci:"Regulus regulus",em:"🐦"},
-  {nl:"Vuurgoudhaan",sci:"Regulus ignicapilla",em:"🐦"},
-  {nl:"Baardman",sci:"Panurus biarmicus",em:"🐦"},
-  {nl:"Staartmees",sci:"Aegithalos caudatus",em:"🐦"},
-  {nl:"Glanskop",sci:"Poecile palustris",em:"🐦"},
-  {nl:"Matkop",sci:"Poecile montanus",em:"🐦"},
-  {nl:"Kuifmees",sci:"Lophophanes cristatus",em:"🐦"},
-  {nl:"Zwarte Mees",sci:"Periparus ater",em:"🐦"},
-  {nl:"Boomkruiper",sci:"Certhia brachydactyla",em:"🐦"},
-  {nl:"Boomklever",sci:"Sitta europaea",em:"🐦"},
+  {nl:"Merel",sci:"Turdus merula",em:"🐦"},{nl:"Koolmees",sci:"Parus major",em:"🐦"},
+  {nl:"Pimpelmees",sci:"Cyanistes caeruleus",em:"🐦"},{nl:"Roodborst",sci:"Erithacus rubecula",em:"🐦"},
+  {nl:"Huismus",sci:"Passer domesticus",em:"🐦"},{nl:"Ringmus",sci:"Passer montanus",em:"🐦"},
+  {nl:"Vink",sci:"Fringilla coelebs",em:"🐦"},{nl:"Groenling",sci:"Chloris chloris",em:"🐦"},
+  {nl:"Putter",sci:"Carduelis carduelis",em:"🐦"},{nl:"Kneu",sci:"Linaria cannabina",em:"🐦"},
+  {nl:"Sijsje",sci:"Spinus spinus",em:"🐦"},{nl:"Keep",sci:"Fringilla montifringilla",em:"🐦"},
+  {nl:"Goudvink",sci:"Pyrrhula pyrrhula",em:"🐦"},{nl:"Appelvink",sci:"Coccothraustes coccothraustes",em:"🐦"},
+  {nl:"Gaai",sci:"Garrulus glandarius",em:"🐦"},{nl:"Ekster",sci:"Pica pica",em:"🐦"},
+  {nl:"Kauw",sci:"Corvus monedula",em:"🐦"},{nl:"Roek",sci:"Corvus frugilegus",em:"🐦"},
+  {nl:"Zwarte Kraai",sci:"Corvus corone",em:"🐦"},{nl:"Bonte Kraai",sci:"Corvus cornix",em:"🐦"},
+  {nl:"Raaf",sci:"Corvus corax",em:"🐦"},{nl:"Spreeuw",sci:"Sturnus vulgaris",em:"🐦"},
+  {nl:"Zanglijster",sci:"Turdus philomelos",em:"🐦"},{nl:"Kramsvogel",sci:"Turdus pilaris",em:"🐦"},
+  {nl:"Koperwiek",sci:"Turdus iliacus",em:"🐦"},{nl:"Grote Lijster",sci:"Turdus viscivorus",em:"🐦"},
+  {nl:"Beflijster",sci:"Turdus torquatus",em:"🐦"},{nl:"Nachtegaal",sci:"Luscinia megarhynchos",em:"🐦"},
+  {nl:"Blauwborst",sci:"Luscinia svecica",em:"🐦"},{nl:"Zwarte Roodstaart",sci:"Phoenicurus ochruros",em:"🐦"},
+  {nl:"Gekraagde Roodstaart",sci:"Phoenicurus phoenicurus",em:"🐦"},{nl:"Tapuit",sci:"Oenanthe oenanthe",em:"🐦"},
+  {nl:"Paapje",sci:"Saxicola rubetra",em:"🐦"},{nl:"Roodborsttapuit",sci:"Saxicola rubicola",em:"🐦"},
+  {nl:"Heggenmus",sci:"Prunella modularis",em:"🐦"},{nl:"Grasmus",sci:"Sylvia communis",em:"🐦"},
+  {nl:"Tuinfluiter",sci:"Sylvia borin",em:"🐦"},{nl:"Zwartkop",sci:"Sylvia atricapilla",em:"🐦"},
+  {nl:"Braamsluiper",sci:"Sylvia curruca",em:"🐦"},{nl:"Spotvogel",sci:"Hippolais icterina",em:"🐦"},
+  {nl:"Kleine Karekiet",sci:"Acrocephalus scirpaceus",em:"🐦"},{nl:"Grote Karekiet",sci:"Acrocephalus arundinaceus",em:"🐦"},
+  {nl:"Bosrietzanger",sci:"Acrocephalus palustris",em:"🐦"},{nl:"Sprinkhaanzanger",sci:"Locustella naevia",em:"🐦"},
+  {nl:"Tjiftjaf",sci:"Phylloscopus collybita",em:"🐦"},{nl:"Fitis",sci:"Phylloscopus trochilus",em:"🐦"},
+  {nl:"Goudhaan",sci:"Regulus regulus",em:"🐦"},{nl:"Vuurgoudhaan",sci:"Regulus ignicapilla",em:"🐦"},
+  {nl:"Baardman",sci:"Panurus biarmicus",em:"🐦"},{nl:"Staartmees",sci:"Aegithalos caudatus",em:"🐦"},
+  {nl:"Glanskop",sci:"Poecile palustris",em:"🐦"},{nl:"Matkop",sci:"Poecile montanus",em:"🐦"},
+  {nl:"Kuifmees",sci:"Lophophanes cristatus",em:"🐦"},{nl:"Zwarte Mees",sci:"Periparus ater",em:"🐦"},
+  {nl:"Boomkruiper",sci:"Certhia brachydactyla",em:"🐦"},{nl:"Boomklever",sci:"Sitta europaea",em:"🐦"},
   {nl:"Winterkoning",sci:"Troglodytes troglodytes",em:"🐦"},
-  {nl:"Buizerd",sci:"Buteo buteo",em:"🦅"},
-  {nl:"Ruigpootbuizerd",sci:"Buteo lagopus",em:"🦅"},
-  {nl:"Wespendief",sci:"Pernis apivorus",em:"🦅"},
-  {nl:"Rode Wouw",sci:"Milvus milvus",em:"🦅"},
-  {nl:"Zwarte Wouw",sci:"Milvus migrans",em:"🦅"},
-  {nl:"Bruine Kiekendief",sci:"Circus aeruginosus",em:"🦅"},
-  {nl:"Blauwe Kiekendief",sci:"Circus cyaneus",em:"🦅"},
-  {nl:"Grauwe Kiekendief",sci:"Circus pygargus",em:"🦅"},
-  {nl:"Havik",sci:"Accipiter gentilis",em:"🦅"},
-  {nl:"Sperwer",sci:"Accipiter nisus",em:"🦅"},
-  {nl:"Torenvalk",sci:"Falco tinnunculus",em:"🦅"},
-  {nl:"Roodpootvalk",sci:"Falco vespertinus",em:"🦅"},
-  {nl:"Smelleken",sci:"Falco columbarius",em:"🦅"},
-  {nl:"Boomvalk",sci:"Falco subbuteo",em:"🦅"},
-  {nl:"Slechtvalk",sci:"Falco peregrinus",em:"🦅"},
-  {nl:"Visarend",sci:"Pandion haliaetus",em:"🦅"},
-  {nl:"Zeearend",sci:"Haliaeetus albicilla",em:"🦅"},
-  {nl:"Steenarend",sci:"Aquila chrysaetos",em:"🦅"},
-  {nl:"Kerkuil",sci:"Tyto alba",em:"🦉"},
-  {nl:"Ransuil",sci:"Asio otus",em:"🦉"},
-  {nl:"Velduil",sci:"Asio flammeus",em:"🦉"},
-  {nl:"Bosuil",sci:"Strix aluco",em:"🦉"},
-  {nl:"Steenuil",sci:"Athene noctua",em:"🦉"},
-  {nl:"Dwerguil",sci:"Glaucidium passerinum",em:"🦉"},
+  {nl:"Buizerd",sci:"Buteo buteo",em:"🦅"},{nl:"Ruigpootbuizerd",sci:"Buteo lagopus",em:"🦅"},
+  {nl:"Wespendief",sci:"Pernis apivorus",em:"🦅"},{nl:"Rode Wouw",sci:"Milvus milvus",em:"🦅"},
+  {nl:"Zwarte Wouw",sci:"Milvus migrans",em:"🦅"},{nl:"Bruine Kiekendief",sci:"Circus aeruginosus",em:"🦅"},
+  {nl:"Blauwe Kiekendief",sci:"Circus cyaneus",em:"🦅"},{nl:"Grauwe Kiekendief",sci:"Circus pygargus",em:"🦅"},
+  {nl:"Havik",sci:"Accipiter gentilis",em:"🦅"},{nl:"Sperwer",sci:"Accipiter nisus",em:"🦅"},
+  {nl:"Torenvalk",sci:"Falco tinnunculus",em:"🦅"},{nl:"Roodpootvalk",sci:"Falco vespertinus",em:"🦅"},
+  {nl:"Smelleken",sci:"Falco columbarius",em:"🦅"},{nl:"Boomvalk",sci:"Falco subbuteo",em:"🦅"},
+  {nl:"Slechtvalk",sci:"Falco peregrinus",em:"🦅"},{nl:"Visarend",sci:"Pandion haliaetus",em:"🦅"},
+  {nl:"Zeearend",sci:"Haliaeetus albicilla",em:"🦅"},{nl:"Steenarend",sci:"Aquila chrysaetos",em:"🦅"},
+  {nl:"Kerkuil",sci:"Tyto alba",em:"🦉"},{nl:"Ransuil",sci:"Asio otus",em:"🦉"},
+  {nl:"Velduil",sci:"Asio flammeus",em:"🦉"},{nl:"Bosuil",sci:"Strix aluco",em:"🦉"},
+  {nl:"Steenuil",sci:"Athene noctua",em:"🦉"},{nl:"Dwerguil",sci:"Glaucidium passerinum",em:"🦉"},
   {nl:"Oehoe",sci:"Bubo bubo",em:"🦉"},
-  {nl:"Blauwe Reiger",sci:"Ardea cinerea",em:"🦢"},
-  {nl:"Purperreiger",sci:"Ardea purpurea",em:"🦢"},
-  {nl:"Grote Zilverreiger",sci:"Ardea alba",em:"🦢"},
-  {nl:"Kleine Zilverreiger",sci:"Egretta garzetta",em:"🦢"},
-  {nl:"Koereiger",sci:"Bubulcus ibis",em:"🦢"},
-  {nl:"Kwak",sci:"Nycticorax nycticorax",em:"🦢"},
-  {nl:"Roerdomp",sci:"Botaurus stellaris",em:"🦢"},
-  {nl:"Lepelaar",sci:"Platalea leucorodia",em:"🦢"},
-  {nl:"Ooievaar",sci:"Ciconia ciconia",em:"🦢"},
-  {nl:"Zwarte Ooievaar",sci:"Ciconia nigra",em:"🦢"},
-  {nl:"Wilde Eend",sci:"Anas platyrhynchos",em:"🦆"},
-  {nl:"Smient",sci:"Mareca penelope",em:"🦆"},
-  {nl:"Krakeend",sci:"Mareca strepera",em:"🦆"},
-  {nl:"Wintertaling",sci:"Anas crecca",em:"🦆"},
-  {nl:"Zomertaling",sci:"Spatula querquedula",em:"🦆"},
-  {nl:"Slobeend",sci:"Spatula clypeata",em:"🦆"},
-  {nl:"Pijlstaart",sci:"Anas acuta",em:"🦆"},
-  {nl:"Kuifeend",sci:"Aythya fuligula",em:"🦆"},
-  {nl:"Tafeleend",sci:"Aythya ferina",em:"🦆"},
-  {nl:"Eider",sci:"Somateria mollissima",em:"🦆"},
-  {nl:"Brilduiker",sci:"Bucephala clangula",em:"🦆"},
-  {nl:"Nonnetje",sci:"Mergellus albellus",em:"🦆"},
+  {nl:"Blauwe Reiger",sci:"Ardea cinerea",em:"🦢"},{nl:"Purperreiger",sci:"Ardea purpurea",em:"🦢"},
+  {nl:"Grote Zilverreiger",sci:"Ardea alba",em:"🦢"},{nl:"Kleine Zilverreiger",sci:"Egretta garzetta",em:"🦢"},
+  {nl:"Koereiger",sci:"Bubulcus ibis",em:"🦢"},{nl:"Kwak",sci:"Nycticorax nycticorax",em:"🦢"},
+  {nl:"Roerdomp",sci:"Botaurus stellaris",em:"🦢"},{nl:"Lepelaar",sci:"Platalea leucorodia",em:"🦢"},
+  {nl:"Ooievaar",sci:"Ciconia ciconia",em:"🦢"},{nl:"Zwarte Ooievaar",sci:"Ciconia nigra",em:"🦢"},
+  {nl:"Wilde Eend",sci:"Anas platyrhynchos",em:"🦆"},{nl:"Smient",sci:"Mareca penelope",em:"🦆"},
+  {nl:"Krakeend",sci:"Mareca strepera",em:"🦆"},{nl:"Wintertaling",sci:"Anas crecca",em:"🦆"},
+  {nl:"Zomertaling",sci:"Spatula querquedula",em:"🦆"},{nl:"Slobeend",sci:"Spatula clypeata",em:"🦆"},
+  {nl:"Pijlstaart",sci:"Anas acuta",em:"🦆"},{nl:"Kuifeend",sci:"Aythya fuligula",em:"🦆"},
+  {nl:"Tafeleend",sci:"Aythya ferina",em:"🦆"},{nl:"Eider",sci:"Somateria mollissima",em:"🦆"},
+  {nl:"Brilduiker",sci:"Bucephala clangula",em:"🦆"},{nl:"Nonnetje",sci:"Mergellus albellus",em:"🦆"},
   {nl:"Grote Zaagbek",sci:"Mergus merganser",em:"🦆"},
-  {nl:"Knobbelzwaan",sci:"Cygnus olor",em:"🦢"},
-  {nl:"Wilde Zwaan",sci:"Cygnus cygnus",em:"🦢"},
-  {nl:"Brandgans",sci:"Branta leucopsis",em:"🦢"},
-  {nl:"Rotgans",sci:"Branta bernicla",em:"🦢"},
-  {nl:"Kolgans",sci:"Anser albifrons",em:"🦢"},
-  {nl:"Grauwe Gans",sci:"Anser anser",em:"🦢"},
-  {nl:"Fuut",sci:"Podiceps cristatus",em:"🐦"},
-  {nl:"Dodaars",sci:"Tachybaptus ruficollis",em:"🐦"},
-  {nl:"Aalscholver",sci:"Phalacrocorax carbo",em:"🐦"},
-  {nl:"Meerkoet",sci:"Fulica atra",em:"🐦"},
-  {nl:"Waterhoen",sci:"Gallinula chloropus",em:"🐦"},
-  {nl:"Waterral",sci:"Rallus aquaticus",em:"🐦"},
-  {nl:"Scholekster",sci:"Haematopus ostralegus",em:"🐦"},
-  {nl:"Kluut",sci:"Recurvirostra avosetta",em:"🐦"},
-  {nl:"Kievit",sci:"Vanellus vanellus",em:"🐦"},
-  {nl:"Goudplevier",sci:"Pluvialis apricaria",em:"🐦"},
-  {nl:"Zilverplevier",sci:"Pluvialis squatarola",em:"🐦"},
-  {nl:"Watersnip",sci:"Gallinago gallinago",em:"🐦"},
-  {nl:"Houtsnip",sci:"Scolopax rusticola",em:"🐦"},
-  {nl:"Grutto",sci:"Limosa limosa",em:"🐦"},
-  {nl:"Wulp",sci:"Numenius arquata",em:"🐦"},
-  {nl:"Regenwulp",sci:"Numenius phaeopus",em:"🐦"},
-  {nl:"Tureluur",sci:"Tringa totanus",em:"🐦"},
-  {nl:"Witgat",sci:"Tringa ochropus",em:"🐦"},
-  {nl:"Oeverloper",sci:"Actitis hypoleucos",em:"🐦"},
-  {nl:"Bonte Strandloper",sci:"Calidris alpina",em:"🐦"},
+  {nl:"Knobbelzwaan",sci:"Cygnus olor",em:"🦢"},{nl:"Wilde Zwaan",sci:"Cygnus cygnus",em:"🦢"},
+  {nl:"Brandgans",sci:"Branta leucopsis",em:"🦢"},{nl:"Rotgans",sci:"Branta bernicla",em:"🦢"},
+  {nl:"Kolgans",sci:"Anser albifrons",em:"🦢"},{nl:"Grauwe Gans",sci:"Anser anser",em:"🦢"},
+  {nl:"Fuut",sci:"Podiceps cristatus",em:"🐦"},{nl:"Dodaars",sci:"Tachybaptus ruficollis",em:"🐦"},
+  {nl:"Aalscholver",sci:"Phalacrocorax carbo",em:"🐦"},{nl:"Meerkoet",sci:"Fulica atra",em:"🐦"},
+  {nl:"Waterhoen",sci:"Gallinula chloropus",em:"🐦"},{nl:"Waterral",sci:"Rallus aquaticus",em:"🐦"},
+  {nl:"Scholekster",sci:"Haematopus ostralegus",em:"🐦"},{nl:"Kluut",sci:"Recurvirostra avosetta",em:"🐦"},
+  {nl:"Kievit",sci:"Vanellus vanellus",em:"🐦"},{nl:"Goudplevier",sci:"Pluvialis apricaria",em:"🐦"},
+  {nl:"Zilverplevier",sci:"Pluvialis squatarola",em:"🐦"},{nl:"Watersnip",sci:"Gallinago gallinago",em:"🐦"},
+  {nl:"Houtsnip",sci:"Scolopax rusticola",em:"🐦"},{nl:"Grutto",sci:"Limosa limosa",em:"🐦"},
+  {nl:"Wulp",sci:"Numenius arquata",em:"🐦"},{nl:"Regenwulp",sci:"Numenius phaeopus",em:"🐦"},
+  {nl:"Tureluur",sci:"Tringa totanus",em:"🐦"},{nl:"Witgat",sci:"Tringa ochropus",em:"🐦"},
+  {nl:"Oeverloper",sci:"Actitis hypoleucos",em:"🐦"},{nl:"Bonte Strandloper",sci:"Calidris alpina",em:"🐦"},
   {nl:"Kemphaan",sci:"Calidris pugnax",em:"🐦"},
-  {nl:"Kokmeeuw",sci:"Chroicocephalus ridibundus",em:"🐦"},
-  {nl:"Stormmeeuw",sci:"Larus canus",em:"🐦"},
-  {nl:"Zilvermeeuw",sci:"Larus argentatus",em:"🐦"},
-  {nl:"Kleine Mantelmeeuw",sci:"Larus fuscus",em:"🐦"},
-  {nl:"Grote Mantelmeeuw",sci:"Larus marinus",em:"🐦"},
-  {nl:"Drieteenmeeuw",sci:"Rissa tridactyla",em:"🐦"},
-  {nl:"Visdief",sci:"Sterna hirundo",em:"🐦"},
-  {nl:"Grote Stern",sci:"Thalasseus sandvicensis",em:"🐦"},
-  {nl:"Dwergstern",sci:"Sternula albifrons",em:"🐦"},
-  {nl:"Zwarte Stern",sci:"Chlidonias niger",em:"🐦"},
-  {nl:"Houtduif",sci:"Columba palumbus",em:"🕊️"},
-  {nl:"Holenduif",sci:"Columba oenas",em:"🕊️"},
-  {nl:"Turkse Tortel",sci:"Streptopelia decaocto",em:"🕊️"},
-  {nl:"Tortelduif",sci:"Streptopelia turtur",em:"🕊️"},
-  {nl:"Grote Bonte Specht",sci:"Dendrocopos major",em:"🐦"},
-  {nl:"Kleine Bonte Specht",sci:"Dryobates minor",em:"🐦"},
-  {nl:"Groene Specht",sci:"Picus viridis",em:"🐦"},
-  {nl:"Zwarte Specht",sci:"Dryocopus martius",em:"🐦"},
-  {nl:"Draaihals",sci:"Jynx torquilla",em:"🐦"},
-  {nl:"Koekoek",sci:"Cuculus canorus",em:"🐦"},
-  {nl:"Gierzwaluw",sci:"Apus apus",em:"🐦"},
-  {nl:"Boerenzwaluw",sci:"Hirundo rustica",em:"🐦"},
-  {nl:"Huiszwaluw",sci:"Delichon urbicum",em:"🐦"},
-  {nl:"Oeverzwaluw",sci:"Riparia riparia",em:"🐦"},
-  {nl:"IJsvogel",sci:"Alcedo atthis",em:"🐦"},
-  {nl:"Bijeneter",sci:"Merops apiaster",em:"🐦"},
-  {nl:"Hop",sci:"Upupa epops",em:"🐦"},
-  {nl:"Nachtzwaluw",sci:"Caprimulgus europaeus",em:"🐦"},
-  {nl:"Gele Kwikstaart",sci:"Motacilla flava",em:"🐦"},
-  {nl:"Grote Gele Kwikstaart",sci:"Motacilla cinerea",em:"🐦"},
-  {nl:"Witte Kwikstaart",sci:"Motacilla alba",em:"🐦"},
-  {nl:"Boompieper",sci:"Anthus trivialis",em:"🐦"},
-  {nl:"Graspieper",sci:"Anthus pratensis",em:"🐦"},
-  {nl:"Veldleeuwerik",sci:"Alauda arvensis",em:"🐦"},
-  {nl:"Boomleeuwerik",sci:"Lullula arborea",em:"🐦"},
-  {nl:"Fazant",sci:"Phasianus colchicus",em:"🐦"},
-  {nl:"Patrijs",sci:"Perdix perdix",em:"🐦"},
-  {nl:"Kwartel",sci:"Coturnix coturnix",em:"🐦"},
-  {nl:"Geelgors",sci:"Emberiza citrinella",em:"🐦"},
-  {nl:"Rietgors",sci:"Emberiza schoeniclus",em:"🐦"},
-  {nl:"Sneeuwgors",sci:"Plectrophenax nivalis",em:"🐦"},
-  {nl:"Jan-van-Gent",sci:"Morus bassanus",em:"🐦"},
-  {nl:"Papegaaiduiker",sci:"Fratercula arctica",em:"🐦"},
-  {nl:"Zeekoet",sci:"Uria aalge",em:"🐦"},
-  {nl:"Alk",sci:"Alca torda",em:"🐦"},
-  {nl:"Noordse Stormvogel",sci:"Fulmarus glacialis",em:"🐦"},
-  {nl:"Grote Jager",sci:"Stercorarius skua",em:"🐦"},
-  {nl:"Roodkeelduiker",sci:"Gavia stellata",em:"🐦"},
+  {nl:"Kokmeeuw",sci:"Chroicocephalus ridibundus",em:"🐦"},{nl:"Stormmeeuw",sci:"Larus canus",em:"🐦"},
+  {nl:"Zilvermeeuw",sci:"Larus argentatus",em:"🐦"},{nl:"Kleine Mantelmeeuw",sci:"Larus fuscus",em:"🐦"},
+  {nl:"Grote Mantelmeeuw",sci:"Larus marinus",em:"🐦"},{nl:"Drieteenmeeuw",sci:"Rissa tridactyla",em:"🐦"},
+  {nl:"Visdief",sci:"Sterna hirundo",em:"🐦"},{nl:"Grote Stern",sci:"Thalasseus sandvicensis",em:"🐦"},
+  {nl:"Dwergstern",sci:"Sternula albifrons",em:"🐦"},{nl:"Zwarte Stern",sci:"Chlidonias niger",em:"🐦"},
+  {nl:"Houtduif",sci:"Columba palumbus",em:"🕊️"},{nl:"Holenduif",sci:"Columba oenas",em:"🕊️"},
+  {nl:"Turkse Tortel",sci:"Streptopelia decaocto",em:"🕊️"},{nl:"Tortelduif",sci:"Streptopelia turtur",em:"🕊️"},
+  {nl:"Grote Bonte Specht",sci:"Dendrocopos major",em:"🐦"},{nl:"Kleine Bonte Specht",sci:"Dryobates minor",em:"🐦"},
+  {nl:"Groene Specht",sci:"Picus viridis",em:"🐦"},{nl:"Zwarte Specht",sci:"Dryocopus martius",em:"🐦"},
+  {nl:"Draaihals",sci:"Jynx torquilla",em:"🐦"},{nl:"Koekoek",sci:"Cuculus canorus",em:"🐦"},
+  {nl:"Gierzwaluw",sci:"Apus apus",em:"🐦"},{nl:"Boerenzwaluw",sci:"Hirundo rustica",em:"🐦"},
+  {nl:"Huiszwaluw",sci:"Delichon urbicum",em:"🐦"},{nl:"Oeverzwaluw",sci:"Riparia riparia",em:"🐦"},
+  {nl:"IJsvogel",sci:"Alcedo atthis",em:"🐦"},{nl:"Bijeneter",sci:"Merops apiaster",em:"🐦"},
+  {nl:"Hop",sci:"Upupa epops",em:"🐦"},{nl:"Nachtzwaluw",sci:"Caprimulgus europaeus",em:"🐦"},
+  {nl:"Gele Kwikstaart",sci:"Motacilla flava",em:"🐦"},{nl:"Grote Gele Kwikstaart",sci:"Motacilla cinerea",em:"🐦"},
+  {nl:"Witte Kwikstaart",sci:"Motacilla alba",em:"🐦"},{nl:"Boompieper",sci:"Anthus trivialis",em:"🐦"},
+  {nl:"Graspieper",sci:"Anthus pratensis",em:"🐦"},{nl:"Veldleeuwerik",sci:"Alauda arvensis",em:"🐦"},
+  {nl:"Boomleeuwerik",sci:"Lullula arborea",em:"🐦"},{nl:"Fazant",sci:"Phasianus colchicus",em:"🐦"},
+  {nl:"Patrijs",sci:"Perdix perdix",em:"🐦"},{nl:"Kwartel",sci:"Coturnix coturnix",em:"🐦"},
+  {nl:"Geelgors",sci:"Emberiza citrinella",em:"🐦"},{nl:"Rietgors",sci:"Emberiza schoeniclus",em:"🐦"},
+  {nl:"Sneeuwgors",sci:"Plectrophenax nivalis",em:"🐦"},{nl:"Jan-van-Gent",sci:"Morus bassanus",em:"🐦"},
+  {nl:"Papegaaiduiker",sci:"Fratercula arctica",em:"🐦"},{nl:"Zeekoet",sci:"Uria aalge",em:"🐦"},
+  {nl:"Alk",sci:"Alca torda",em:"🐦"},{nl:"Noordse Stormvogel",sci:"Fulmarus glacialis",em:"🐦"},
+  {nl:"Grote Jager",sci:"Stercorarius skua",em:"🐦"},{nl:"Roodkeelduiker",sci:"Gavia stellata",em:"🐦"},
   {nl:"IJsduiker",sci:"Gavia immer",em:"🐦"},
 ];
 
@@ -739,18 +618,107 @@ const BIRDS = ALL_BIRDS.filter(b => {
   return true;
 }).sort((a,b) => a.nl.localeCompare(b.nl, 'nl'));
 
-// State
+// ─── STATE ────────────────────────────────────────────────────────────────────
 let lists = JSON.parse(localStorage.getItem('vw_lists') || '["Jaarlijst","Vakantielijst","Projectlijst"]');
-let sightings = JSON.parse(localStorage.getItem('vw_sightings') || '[]');
 let activeList = localStorage.getItem('vw_activeList') || lists[0];
+let sightings = []; // loaded from Supabase
+let pendingQueue = JSON.parse(localStorage.getItem('vw_pending') || '[]'); // offline queue
 let filteredBirds = [...BIRDS];
+let isOnline = navigator.onLine;
 
-function save() {
+function saveLocal() {
   localStorage.setItem('vw_lists', JSON.stringify(lists));
-  localStorage.setItem('vw_sightings', JSON.stringify(sightings));
   localStorage.setItem('vw_activeList', activeList);
+  localStorage.setItem('vw_pending', JSON.stringify(pendingQueue));
 }
 
+// ─── STATUS UI ────────────────────────────────────────────────────────────────
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = `status-dot ${state}`;
+  txt.textContent = text;
+}
+
+function updatePendingBadge() {
+  const badge = document.getElementById('pendingBadge');
+  if (pendingQueue.length > 0) {
+    badge.textContent = `${pendingQueue.length} wacht op sync`;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+// ─── SUPABASE OPERATIONS ─────────────────────────────────────────────────────
+async function loadSightings() {
+  try {
+    setStatus('syncing', 'Laden...');
+    const data = await sbFetch(`waarnemingen?lijst=eq.${encodeURIComponent(activeList)}&order=tijdstip.desc&limit=50`);
+    sightings = data || [];
+    setStatus('online', 'Gesynchroniseerd');
+    isOnline = true;
+  } catch (e) {
+    setStatus('offline', 'Offline — opslaan lokaal');
+    isOnline = false;
+    sightings = [];
+  }
+  renderSightings();
+  updatePendingBadge();
+}
+
+async function saveSighting(entry) {
+  const record = {
+    naam: entry.nl,
+    wetenschappelijk: entry.sci,
+    lijst: entry.list,
+    tijdstip: new Date(entry.ts).toISOString(),
+    lat: entry.lat,
+    lon: entry.lon,
+  };
+  try {
+    setStatus('syncing', 'Opslaan...');
+    await sbFetch('waarnemingen', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(record)
+    });
+    setStatus('online', 'Opgeslagen ✓');
+    return true;
+  } catch (e) {
+    setStatus('offline', 'Offline — lokaal opgeslagen');
+    return false;
+  }
+}
+
+async function deleteSightingRemote(id) {
+  try {
+    await sbFetch(`waarnemingen?id=eq.${id}`, { method: 'DELETE' });
+    return true;
+  } catch(e) {
+    showToast('Verwijderen mislukt', true);
+    return false;
+  }
+}
+
+async function flushPendingQueue() {
+  if (pendingQueue.length === 0) return;
+  setStatus('syncing', `${pendingQueue.length} opslaan...`);
+  const failed = [];
+  for (const entry of pendingQueue) {
+    const ok = await saveSighting(entry);
+    if (!ok) failed.push(entry);
+  }
+  pendingQueue = failed;
+  saveLocal();
+  updatePendingBadge();
+  if (failed.length === 0) {
+    setStatus('online', 'Alles gesynchroniseerd ✓');
+    await loadSightings();
+  }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
 function renderListSelect() {
   const sel = document.getElementById('listSelect');
   sel.innerHTML = lists.map(l =>
@@ -760,8 +728,8 @@ function renderListSelect() {
 
 function onListChange() {
   activeList = document.getElementById('listSelect').value;
-  save();
-  renderSightings();
+  saveLocal();
+  loadSightings();
 }
 
 function filterBirds() {
@@ -791,41 +759,66 @@ function renderBirdList() {
 }
 
 function renderSightings() {
-  const list = sightings.filter(s => s.list === activeList).slice().reverse();
-  document.getElementById('sightingCount').textContent = list.length;
+  // Combine remote sightings with pending local ones for current list
+  const pending = pendingQueue.filter(p => p.list === activeList);
+  const total = pending.length + sightings.length;
+  document.getElementById('sightingCount').textContent = total;
+
   const el = document.getElementById('sightingsList');
-  if (list.length === 0) {
+  if (total === 0) {
     el.innerHTML = '<div class="empty-state">Nog geen waarnemingen in deze lijst.<br>Zoek een vogel hierboven en log hem!</div>';
     return;
   }
-  el.innerHTML = list.map((s, i) => {
-    const idx = sightings.length - 1 - i;
-    const loc = s.lat ? `📍 ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}` : '📍 geen locatie';
+
+  const pendingHtml = pending.slice().reverse().map(s => {
     const dt = new Date(s.ts);
-    const dateStr = dt.toLocaleDateString('nl-NL',{day:'2-digit',month:'short',year:'numeric'});
-    const timeStr = dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
     return `
-      <div class="sighting-card">
+      <div class="sighting-card pending">
         <span class="sighting-emoji">${s.em}</span>
         <div class="sighting-info">
           <div class="sighting-name">${s.nl}</div>
           <div class="sighting-meta">
-            <span>📅 ${dateStr} ${timeStr}</span>
-            <span>${loc}</span>
+            <span>📅 ${dt.toLocaleDateString('nl-NL',{day:'2-digit',month:'short'})} ${dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span>
+            ${s.lat ? `<span>📍 ${s.lat.toFixed(3)}, ${s.lon.toFixed(3)}</span>` : ''}
+          </div>
+          <div class="sighting-meta"><span class="sync-indicator">⏳ wacht op sync</span></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const remoteHtml = sightings.map(s => {
+    const dt = new Date(s.tijdstip);
+    const loc = s.lat ? `📍 ${parseFloat(s.lat).toFixed(3)}, ${parseFloat(s.lon).toFixed(3)}` : '';
+    return `
+      <div class="sighting-card">
+        <span class="sighting-emoji">${getBirdEmoji(s.naam)}</span>
+        <div class="sighting-info">
+          <div class="sighting-name">${s.naam}</div>
+          <div class="sighting-meta">
+            <span>📅 ${dt.toLocaleDateString('nl-NL',{day:'2-digit',month:'short',year:'numeric'})} ${dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span>
+            ${loc ? `<span>${loc}</span>` : ''}
           </div>
           <div class="sighting-meta" style="margin-top:2px">
-            <span class="sighting-list-badge">${s.list}</span>
+            <span class="sighting-list-badge">${s.lijst}</span>
           </div>
         </div>
-        <button class="sighting-delete" onclick="deleteSighting(${idx})">✕</button>
-      </div>
-    `;
+        <button class="sighting-delete" onclick="deleteSighting('${s.id}')">✕</button>
+      </div>`;
   }).join('');
+
+  el.innerHTML = pendingHtml + remoteHtml;
 }
 
+function getBirdEmoji(name) {
+  const bird = BIRDS.find(b => b.nl === name);
+  return bird ? bird.em : '🐦';
+}
+
+// ─── LOG BIRD ─────────────────────────────────────────────────────────────────
 function logBird(nl, sci, em) {
   if (!activeList) { showToast('Kies eerst een lijst!'); return; }
   const entry = { nl, sci, em, list: activeList, ts: Date.now(), lat: null, lon: null };
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => { entry.lat = pos.coords.latitude; entry.lon = pos.coords.longitude; finishLog(entry); },
@@ -837,19 +830,35 @@ function logBird(nl, sci, em) {
   }
 }
 
-function finishLog(entry) {
-  sightings.push(entry);
-  save();
+async function finishLog(entry) {
+  // Show immediately in UI
+  pendingQueue.push(entry);
+  saveLocal();
+  updatePendingBadge();
   renderSightings();
   showToast(`✓ ${entry.nl} gelogd${entry.lat ? ' 📍' : ''}`);
+
+  // Try to save to Supabase
+  const ok = await saveSighting(entry);
+  if (ok) {
+    // Remove from pending queue
+    pendingQueue = pendingQueue.filter(p => p !== entry);
+    saveLocal();
+    updatePendingBadge();
+    await loadSightings();
+  }
 }
 
-function deleteSighting(idx) {
-  sightings.splice(idx, 1);
-  save();
-  renderSightings();
+async function deleteSighting(id) {
+  const ok = await deleteSightingRemote(id);
+  if (ok) {
+    sightings = sightings.filter(s => s.id !== id);
+    renderSightings();
+    showToast('Verwijderd');
+  }
 }
 
+// ─── LISTS ────────────────────────────────────────────────────────────────────
 function openNewListModal() {
   document.getElementById('newListModal').classList.add('open');
   setTimeout(() => document.getElementById('newListInput').focus(), 200);
@@ -866,55 +875,82 @@ function confirmNewList() {
   if (lists.includes(name)) { showToast('Lijst bestaat al!'); return; }
   lists.push(name);
   activeList = name;
-  save();
+  saveLocal();
   renderListSelect();
   renderSightings();
   closeModal();
   showToast(`Lijst "${name}" aangemaakt`);
 }
 
-function exportXLSX() {
-  if (sightings.length === 0) { showToast('Nog geen waarnemingen!'); return; }
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+async function exportXLSX() {
+  showToast('Exporteren...');
+  let allData = [];
+  try {
+    // Fetch all sightings for all lists
+    allData = await sbFetch('waarnemingen?order=lijst.asc,tijdstip.asc');
+  } catch(e) {
+    showToast('Offline — alleen lokale data', true);
+    allData = pendingQueue.map(p => ({
+      naam: p.nl, wetenschappelijk: p.sci, lijst: p.list,
+      tijdstip: new Date(p.ts).toISOString(), lat: p.lat, lon: p.lon
+    }));
+  }
+
+  if (!allData || allData.length === 0) { showToast('Geen data om te exporteren'); return; }
+
   const wb = XLSX.utils.book_new();
   const byList = {};
-  lists.forEach(l => byList[l] = []);
-  sightings.forEach(s => { if (!byList[s.list]) byList[s.list] = []; byList[s.list].push(s); });
-  lists.forEach(listName => {
+  allData.forEach(s => {
+    if (!byList[s.lijst]) byList[s.lijst] = [];
+    byList[s.lijst].push(s);
+  });
+
+  Object.entries(byList).forEach(([listName, entries]) => {
     const rows = [['Nederlandse naam','Wetenschappelijke naam','Datum','Tijd','Breedtegraad','Lengtegraad','Lijst']];
-    byList[listName].forEach(s => {
-      const dt = new Date(s.ts);
-      rows.push([s.nl, s.sci, dt.toLocaleDateString('nl-NL'), dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}), s.lat||'', s.lon||'', s.list]);
+    entries.forEach(s => {
+      const dt = new Date(s.tijdstip);
+      rows.push([s.naam, s.wetenschappelijk||'', dt.toLocaleDateString('nl-NL'), dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}), s.lat||'', s.lon||'', s.lijst]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{wch:24},{wch:28},{wch:12},{wch:8},{wch:12},{wch:12},{wch:16}];
     XLSX.utils.book_append_sheet(wb, ws, listName.substring(0,31).replace(/[\\\/\?\*\[\]:]/g,'_'));
   });
+
   XLSX.writeFile(wb, 'Vogelwaarnemingen.xlsx');
-  showToast('📊 Bestand gedownload!');
+  showToast('📊 Gedownload!');
 }
 
+// ─── TOAST ────────────────────────────────────────────────────────────────────
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.classList.add('show');
+  t.className = `toast${isError ? ' error-toast' : ''} show`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// PWA: Service Worker
+// ─── ONLINE/OFFLINE ───────────────────────────────────────────────────────────
+window.addEventListener('online', () => {
+  isOnline = true;
+  flushPendingQueue();
+});
+window.addEventListener('offline', () => {
+  isOnline = false;
+  setStatus('offline', 'Offline — opslaan lokaal');
+});
+
+// ─── SERVICE WORKER ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(console.error);
 }
 
-// Offline indicator
-window.addEventListener('online', () => document.getElementById('offlineBanner').classList.remove('show'));
-window.addEventListener('offline', () => document.getElementById('offlineBanner').classList.add('show'));
-if (!navigator.onLine) document.getElementById('offlineBanner').classList.add('show');
-
+// ─── INIT ─────────────────────────────────────────────────────────────────────
 renderListSelect();
 renderBirdList();
-renderSightings();
+loadSightings();
+if (pendingQueue.length > 0 && navigator.onLine) flushPendingQueue();
 </script>
 </body>
 </html>
