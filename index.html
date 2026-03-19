@@ -9,7 +9,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <title>Vogelwaarnemingen</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Sans+3:wght@300;400;600&display=swap');
 
@@ -52,7 +51,7 @@
     z-index: 1;
     max-width: 480px;
     margin: 0 auto;
-    padding: 0 0 90px 0;
+    padding: 0 0 30px 0;
   }
 
   /* Status bar */
@@ -308,30 +307,18 @@
   }
   .sighting-delete:active { color: var(--danger); }
 
-  .bottom-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    padding: 10px 20px 14px;
-    background: linear-gradient(0deg, rgba(10,25,16,0.97) 0%, rgba(10,25,16,0.8) 100%);
-    backdrop-filter: blur(8px);
+  .duplicate-warning {
+    background: rgba(229,115,115,0.15);
+    border: 1px solid rgba(229,115,115,0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 4px;
+    font-size: 0.82rem;
+    color: #ffb3b3;
     display: flex;
-    gap: 10px;
-    z-index: 100;
+    align-items: center;
+    gap: 8px;
   }
-
-  .btn-export {
-    flex: 1;
-    background: linear-gradient(135deg, var(--bark), #7a5e3a);
-    border: none; border-radius: 10px;
-    color: var(--cream);
-    padding: 13px;
-    font-family: 'Source Sans 3', sans-serif;
-    font-size: 0.9rem; font-weight: 600;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 7px;
-    transition: all 0.2s;
-  }
-  .btn-export:active { transform: scale(0.97); opacity: 0.9; }
 
   .modal-overlay {
     position: fixed; inset: 0;
@@ -477,10 +464,18 @@
   </div>
 </div>
 
-<div class="bottom-bar">
-  <button class="btn-export" onclick="exportXLSX()">
-    📊 Exporteer naar Excel / LibreOffice
-  </button>
+<div class="modal-overlay" id="duplicateModal">
+  <div class="modal">
+    <h2>⚠️ Al op lijst</h2>
+    <div class="duplicate-warning">
+      <span id="duplicateText"></span>
+    </div>
+    <p style="font-size:0.85rem; color:var(--mist); opacity:0.8; margin: 12px 0 16px;">Wil je hem toch nogmaals loggen, of annuleren?</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeDuplicateModal()">Annuleer</button>
+      <button class="btn-confirm" style="background:var(--bark);" onclick="confirmDuplicateLog()">Toch loggen</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="newListModal">
@@ -815,10 +810,40 @@ function getBirdEmoji(name) {
 }
 
 // ─── LOG BIRD ─────────────────────────────────────────────────────────────────
+let pendingEntry = null; // held while duplicate modal is open
+
 function logBird(nl, sci, em) {
   if (!activeList) { showToast('Kies eerst een lijst!'); return; }
-  const entry = { nl, sci, em, list: activeList, ts: Date.now(), lat: null, lon: null };
 
+  // Duplicate check: already on this list?
+  const alreadyRemote = sightings.some(s => s.naam === nl);
+  const alreadyPending = pendingQueue.some(p => p.nl === nl && p.list === activeList);
+  if (alreadyRemote || alreadyPending) {
+    // Find first occurrence date
+    const existing = sightings.find(s => s.naam === nl) || pendingQueue.find(p => p.nl === nl && p.list === activeList);
+    const date = existing ? new Date(existing.tijdstip || existing.ts).toLocaleDateString('nl-NL', {day:'2-digit', month:'short', year:'numeric'}) : '';
+    document.getElementById('duplicateText').textContent = `${nl} staat al op "${activeList}"${date ? ` (${date})` : ''}.`;
+    pendingEntry = { nl, sci, em };
+    document.getElementById('duplicateModal').classList.add('open');
+    return;
+  }
+
+  startGeoAndLog(nl, sci, em);
+}
+
+function closeDuplicateModal() {
+  document.getElementById('duplicateModal').classList.remove('open');
+  pendingEntry = null;
+}
+
+function confirmDuplicateLog() {
+  document.getElementById('duplicateModal').classList.remove('open');
+  if (pendingEntry) startGeoAndLog(pendingEntry.nl, pendingEntry.sci, pendingEntry.em);
+  pendingEntry = null;
+}
+
+function startGeoAndLog(nl, sci, em) {
+  const entry = { nl, sci, em, list: activeList, ts: Date.now(), lat: null, lon: null };
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => { entry.lat = pos.coords.latitude; entry.lon = pos.coords.longitude; finishLog(entry); },
