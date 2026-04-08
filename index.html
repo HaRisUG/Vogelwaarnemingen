@@ -468,6 +468,21 @@
     text-align: center; padding: 24px;
     color: var(--mist); opacity: 0.5; font-size: 0.85rem;
   }
+
+  .species-count-row {
+    margin-top: 6px;
+  }
+  .species-count-pill {
+    display: inline-block;
+    background: rgba(107,168,122,0.2);
+    border: 1px solid rgba(107,168,122,0.4);
+    color: var(--leaf);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
 </style>
 </head>
 <body>
@@ -500,6 +515,9 @@
       <div class="list-row">
         <select class="list-select" id="listSelect" onchange="onListChange()"></select>
         <button class="btn-icon" onclick="openNewListModal()" title="Nieuwe lijst">＋</button>
+      </div>
+      <div class="species-count-row" id="speciesCountRow" style="display:none;">
+        <span class="species-count-pill" id="speciesCountPill"></span>
       </div>
     </div>
   </header>
@@ -778,6 +796,7 @@ async function loadSightings() {
   }
   renderSightings();
   updatePendingBadge();
+  updateSpeciesCount();
 }
 
 async function saveSighting(entry) {
@@ -828,6 +847,22 @@ async function flushPendingQueue() {
   if (failed.length === 0) {
     setStatus('online', 'Alles gesynchroniseerd ✓');
     await loadSightings();
+  }
+}
+
+// ─── SPECIES COUNT ────────────────────────────────────────────────────────────
+function updateSpeciesCount() {
+  const pendingNames = pendingQueue.filter(p => p.list === activeList).map(p => p.nl);
+  const remoteNames = sightings.map(s => s.naam);
+  const unique = new Set([...remoteNames, ...pendingNames]);
+  const count = unique.size;
+  const pill = document.getElementById('speciesCountPill');
+  const row = document.getElementById('speciesCountRow');
+  if (count > 0) {
+    pill.textContent = `${count} soort${count === 1 ? '' : 'en'}`;
+    row.style.display = 'block';
+  } else {
+    row.style.display = 'none';
   }
 }
 
@@ -1072,12 +1107,27 @@ function confirmLogDetails() {
 }
 
 async function finishLog(entry) {
+  // Check if this is a new species on this list (before adding to queue)
+  const alreadyInSightings = sightings.some(s => s.naam === entry.nl);
+  const alreadyInPending = pendingQueue.some(p => p.nl === entry.nl && p.list === entry.list);
+  const isNewSpecies = !alreadyInSightings && !alreadyInPending;
+
   // Show immediately in UI
   pendingQueue.push(entry);
   saveLocal();
   updatePendingBadge();
   renderSightings();
-  showToast(`✓ ${entry.nl} gelogd${entry.lat ? ' 📍' : ''}`);
+  updateSpeciesCount();
+
+  if (isNewSpecies) {
+    // Count unique species including the one just added
+    const pendingNames = pendingQueue.filter(p => p.list === entry.list).map(p => p.nl);
+    const remoteNames = sightings.filter(s => s.lijst === entry.list || entry.list === activeList).map(s => s.naam);
+    const newCount = new Set([...remoteNames, ...pendingNames]).size;
+    showToast(`🎉 ${entry.nl} — #${newCount} op je ${entry.list}!`);
+  } else {
+    showToast(`✓ ${entry.nl} gelogd${entry.lat ? ' 📍' : ''}`);
+  }
 
   // Try to save to Supabase
   const ok = await saveSighting(entry);
