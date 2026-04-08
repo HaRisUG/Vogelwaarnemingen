@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <title>Vogelwaarnemingen</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Source+Sans+3:wght@300;400;600&display=swap');
@@ -307,6 +308,53 @@
   }
   .sighting-delete:active { color: var(--danger); }
 
+  /* ── Log details modal ── */
+  .log-details-modal { max-height: 92vh; overflow-y: auto; }
+  .log-details-section { margin-bottom: 14px; }
+  .log-details-label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--sage);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+  #logDetailsMap {
+    width: 100%;
+    height: 220px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    margin-bottom: 6px;
+    background: #2d5a3d;
+  }
+  .log-details-coords {
+    font-size: 0.75rem;
+    color: var(--mist);
+    opacity: 0.65;
+    margin-bottom: 8px;
+    min-height: 1rem;
+  }
+  .loc-status {
+    font-size: 0.72rem;
+    color: var(--sage);
+    font-style: italic;
+    margin-left: 4px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .btn-gps {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--mist);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-gps:active { opacity: 0.7; }
+
   .btn-manual-add {
     display: inline-block;
     margin-top: 10px;
@@ -501,6 +549,29 @@
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Annuleer</button>
       <button class="btn-confirm" onclick="confirmNewList()">Aanmaken</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="logDetailsModal">
+  <div class="modal log-details-modal">
+    <h2 id="logDetailsTitle">🐦 Waarneming vastleggen</h2>
+
+    <div class="log-details-section">
+      <label class="log-details-label">📅 Datum en tijd</label>
+      <input class="modal-input" type="datetime-local" id="logDetailsDatetime">
+    </div>
+
+    <div class="log-details-section">
+      <label class="log-details-label">📍 Locatie <span id="logDetailsLocStatus" class="loc-status"></span></label>
+      <div id="logDetailsMap"></div>
+      <div class="log-details-coords" id="logDetailsCoords">Geen locatie</div>
+      <button class="btn-gps" id="btnGps" onclick="retryGps()">📡 Huidige locatie</button>
+    </div>
+
+    <div class="modal-btns" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="closeLogDetailsModal()">Annuleer</button>
+      <button class="btn-confirm" onclick="confirmLogDetails()">Opslaan</button>
     </div>
   </div>
 </div>
@@ -890,17 +961,114 @@ function confirmDuplicateLog() {
   pendingEntry = null;
 }
 
+// ─── LOG DETAILS MODAL (location + datetime) ─────────────────────────────────
+let logDetailsEntry = null;  // bird being logged
+let logDetailsMap = null;    // Leaflet map instance
+let logDetailsMarker = null; // draggable marker
+
+function toDatetimeLocal(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function startGeoAndLog(nl, sci, em) {
-  const entry = { nl, sci, em, list: activeList, ts: Date.now(), lat: null, lon: null };
+  logDetailsEntry = { nl, sci, em, list: activeList, ts: Date.now(), lat: null, lon: null };
+
+  // Set default datetime to now
+  document.getElementById('logDetailsDatetime').value = toDatetimeLocal(new Date());
+  document.getElementById('logDetailsTitle').textContent = `${em} ${nl}`;
+  document.getElementById('logDetailsLocStatus').textContent = 'locatie ophalen...';
+  document.getElementById('logDetailsCoords').textContent = 'Geen locatie';
+
+  // Open modal first so map container is visible
+  document.getElementById('logDetailsModal').classList.add('open');
+
+  // Init or reset Leaflet map (center on Netherlands as fallback)
+  const NL = [52.37, 5.22];
+  if (!logDetailsMap) {
+    logDetailsMap = L.map('logDetailsMap', { zoomControl: true }).setView(NL, 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19
+    }).addTo(logDetailsMap);
+    logDetailsMarker = L.marker(NL, { draggable: true }).addTo(logDetailsMap);
+    logDetailsMarker.on('dragend', () => {
+      const ll = logDetailsMarker.getLatLng();
+      logDetailsEntry.lat = ll.lat;
+      logDetailsEntry.lon = ll.lng;
+      updateCoordsDisplay(ll.lat, ll.lng);
+    });
+    logDetailsMap.on('click', e => {
+      logDetailsMarker.setLatLng(e.latlng);
+      logDetailsEntry.lat = e.latlng.lat;
+      logDetailsEntry.lon = e.latlng.lng;
+      updateCoordsDisplay(e.latlng.lat, e.latlng.lng);
+    });
+  } else {
+    logDetailsMap.setView(NL, 8);
+    logDetailsMarker.setLatLng(NL);
+    setTimeout(() => logDetailsMap.invalidateSize(), 50);
+  }
+
+  // Try GPS
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      pos => { entry.lat = pos.coords.latitude; entry.lon = pos.coords.longitude; finishLog(entry); },
-      () => finishLog(entry),
-      { timeout: 5000, maximumAge: 30000 }
+      pos => {
+        const ll = [pos.coords.latitude, pos.coords.longitude];
+        logDetailsEntry.lat = pos.coords.latitude;
+        logDetailsEntry.lon = pos.coords.longitude;
+        logDetailsMap.setView(ll, 14);
+        logDetailsMarker.setLatLng(ll);
+        updateCoordsDisplay(pos.coords.latitude, pos.coords.longitude);
+        document.getElementById('logDetailsLocStatus').textContent = 'GPS gevonden ✓';
+      },
+      () => {
+        document.getElementById('logDetailsLocStatus').textContent = 'geen GPS — klik op kaart';
+        setTimeout(() => logDetailsMap.invalidateSize(), 50);
+      },
+      { timeout: 8000, maximumAge: 30000 }
     );
   } else {
-    finishLog(entry);
+    document.getElementById('logDetailsLocStatus').textContent = 'geen GPS — klik op kaart';
   }
+  setTimeout(() => logDetailsMap.invalidateSize(), 100);
+}
+
+function updateCoordsDisplay(lat, lon) {
+  document.getElementById('logDetailsCoords').textContent =
+    `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+function retryGps() {
+  document.getElementById('logDetailsLocStatus').textContent = 'locatie ophalen...';
+  if (!navigator.geolocation) { showToast('GPS niet beschikbaar'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      logDetailsEntry.lat = pos.coords.latitude;
+      logDetailsEntry.lon = pos.coords.longitude;
+      logDetailsMap.setView(ll, 14);
+      logDetailsMarker.setLatLng(ll);
+      updateCoordsDisplay(pos.coords.latitude, pos.coords.longitude);
+      document.getElementById('logDetailsLocStatus').textContent = 'GPS gevonden ✓';
+    },
+    () => { document.getElementById('logDetailsLocStatus').textContent = 'GPS mislukt'; showToast('GPS niet beschikbaar', true); },
+    { timeout: 8000, maximumAge: 0 }
+  );
+}
+
+function closeLogDetailsModal() {
+  document.getElementById('logDetailsModal').classList.remove('open');
+  logDetailsEntry = null;
+}
+
+function confirmLogDetails() {
+  if (!logDetailsEntry) return;
+  const dtVal = document.getElementById('logDetailsDatetime').value;
+  logDetailsEntry.ts = dtVal ? new Date(dtVal).getTime() : Date.now();
+  document.getElementById('logDetailsModal').classList.remove('open');
+  finishLog(logDetailsEntry);
+  logDetailsEntry = null;
 }
 
 async function finishLog(entry) {
@@ -1094,6 +1262,9 @@ window.addEventListener('offline', () => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(console.error);
 }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>// Leaflet loaded
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 renderListSelect();
