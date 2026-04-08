@@ -307,6 +307,20 @@
   }
   .sighting-delete:active { color: var(--danger); }
 
+  .btn-manual-add {
+    display: inline-block;
+    margin-top: 10px;
+    background: rgba(139,195,74,0.15);
+    border: 1px solid rgba(139,195,74,0.4);
+    color: var(--sage);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-manual-add:active { opacity: 0.7; }
+
   .duplicate-warning {
     background: rgba(229,115,115,0.15);
     border: 1px solid rgba(229,115,115,0.35);
@@ -487,6 +501,31 @@
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Annuleer</button>
       <button class="btn-confirm" onclick="confirmNewList()">Aanmaken</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manualAddModal">
+  <div class="modal">
+    <h2>🔍 Vogel toevoegen</h2>
+    <p style="font-size:0.85rem; color:var(--mist); margin-bottom:14px;" id="manualAddStatus">Wetenschappelijke naam opzoeken...</p>
+    <div id="manualAddResult" style="display:none;">
+      <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:12px; margin-bottom:14px;">
+        <div style="font-size:1rem; font-weight:600; color:var(--mist);" id="manualAddNl"></div>
+        <div style="font-size:0.82rem; font-style:italic; color:var(--sage); margin-top:4px;" id="manualAddSci"></div>
+      </div>
+      <p style="font-size:0.8rem; color:var(--mist); opacity:0.7; margin-bottom:14px;">Klopt dit? Je kunt de naam hieronder aanpassen.</p>
+      <input class="modal-input" id="manualAddNlInput" type="text" placeholder="Nederlandse naam" style="margin-bottom:8px;">
+      <input class="modal-input" id="manualAddSciInput" type="text" placeholder="Wetenschappelijke naam (optioneel)">
+    </div>
+    <div id="manualAddNotFound" style="display:none;">
+      <p style="font-size:0.85rem; color:var(--mist); margin-bottom:12px;">Niet gevonden via GBIF. Vul zelf in:</p>
+      <input class="modal-input" id="manualAddNlInput2" type="text" placeholder="Nederlandse naam" style="margin-bottom:8px;">
+      <input class="modal-input" id="manualAddSciInput2" type="text" placeholder="Wetenschappelijke naam (optioneel)">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeManualAddModal()">Annuleer</button>
+      <button class="btn-confirm" id="manualAddConfirmBtn" onclick="confirmManualAdd()" style="display:none;">Toevoegen + Log</button>
     </div>
   </div>
 </div>
@@ -746,7 +785,8 @@ function filterBirds() {
 function renderBirdList() {
   const el = document.getElementById('birdList');
   if (filteredBirds.length === 0) {
-    el.innerHTML = '<div class="no-results">Geen vogels gevonden</div>';
+    const q = document.getElementById('searchInput').value.trim();
+    el.innerHTML = `<div class="no-results">Geen vogels gevonden${q ? `<br><button class="btn-manual-add" onclick="openManualAddModal('${q.replace(/'/g,"\\'")}')">${q} handmatig toevoegen</button>` : ''}</div>`;
     return;
   }
   el.innerHTML = filteredBirds.slice(0, 60).map(b => `
@@ -891,6 +931,81 @@ async function deleteSighting(id) {
   }
 }
 
+// ─── MANUAL BIRD ADD ──────────────────────────────────────────────────────────
+async function openManualAddModal(query) {
+  const modal = document.getElementById('manualAddModal');
+  document.getElementById('manualAddStatus').textContent = `"${query}" opzoeken via GBIF...`;
+  document.getElementById('manualAddResult').style.display = 'none';
+  document.getElementById('manualAddNotFound').style.display = 'none';
+  document.getElementById('manualAddConfirmBtn').style.display = 'none';
+  modal.classList.add('open');
+
+  try {
+    // Search GBIF for Dutch vernacular name first
+    const r1 = await fetch(`https://api.gbif.org/v1/species/search?vernacularName=${encodeURIComponent(query)}&rank=SPECIES&class=Aves&limit=5`);
+    const d1 = await r1.json();
+    let match = null;
+
+    if (d1.results && d1.results.length > 0) {
+      match = d1.results[0];
+    } else {
+      // Fallback: general name search
+      const r2 = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&rank=SPECIES&limit=10`);
+      const d2 = await r2.json();
+      // Filter to birds (class Aves)
+      match = d2.find(s => s.class === 'Aves') || null;
+    }
+
+    if (match) {
+      const sciName = match.canonicalName || match.scientificName || '';
+      // Try to get Dutch vernacular name from GBIF vernacular names
+      let dutchName = query;
+      try {
+        const r3 = await fetch(`https://api.gbif.org/v1/species/${match.key}/vernacularNames?limit=20`);
+        const d3 = await r3.json();
+        const nl = d3.results && d3.results.find(v => v.language === 'nld' || v.language === 'dut');
+        if (nl) dutchName = nl.vernacularName;
+      } catch(_) {}
+
+      document.getElementById('manualAddNl').textContent = dutchName;
+      document.getElementById('manualAddSci').textContent = sciName;
+      document.getElementById('manualAddNlInput').value = dutchName;
+      document.getElementById('manualAddSciInput').value = sciName;
+      document.getElementById('manualAddStatus').textContent = 'Gevonden via GBIF:';
+      document.getElementById('manualAddResult').style.display = 'block';
+    } else {
+      document.getElementById('manualAddNlInput2').value = query;
+      document.getElementById('manualAddSciInput2').value = '';
+      document.getElementById('manualAddStatus').textContent = 'Niet gevonden via GBIF. Vul zelf in:';
+      document.getElementById('manualAddNotFound').style.display = 'block';
+    }
+    document.getElementById('manualAddConfirmBtn').style.display = 'inline-block';
+  } catch(e) {
+    document.getElementById('manualAddNlInput2').value = query;
+    document.getElementById('manualAddSciInput2').value = '';
+    document.getElementById('manualAddStatus').textContent = 'GBIF niet bereikbaar. Vul zelf in:';
+    document.getElementById('manualAddNotFound').style.display = 'block';
+    document.getElementById('manualAddConfirmBtn').style.display = 'inline-block';
+  }
+}
+
+function closeManualAddModal() {
+  document.getElementById('manualAddModal').classList.remove('open');
+}
+
+function confirmManualAdd() {
+  const resultVisible = document.getElementById('manualAddResult').style.display !== 'none';
+  const nl = resultVisible
+    ? document.getElementById('manualAddNlInput').value.trim()
+    : document.getElementById('manualAddNlInput2').value.trim();
+  const sci = resultVisible
+    ? document.getElementById('manualAddSciInput').value.trim()
+    : document.getElementById('manualAddSciInput2').value.trim();
+  if (!nl) { showToast('Vul een naam in!'); return; }
+  closeManualAddModal();
+  logBird(nl, sci, '🐦');
+}
+
 // ─── LISTS ────────────────────────────────────────────────────────────────────
 function openNewListModal() {
   document.getElementById('newListModal').classList.add('open');
@@ -910,7 +1025,8 @@ function confirmNewList() {
   activeList = name;
   saveLocal();
   renderListSelect();
-  renderSightings();
+  sightings = []; // clear stale sightings from previous list
+  loadSightings();
   closeModal();
   showToast(`Lijst "${name}" aangemaakt`);
 }
