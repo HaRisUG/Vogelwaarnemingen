@@ -1172,35 +1172,17 @@ async function openManualAddModal(query) {
   modal.classList.add('open');
 
   try {
-    // Search GBIF for Dutch vernacular name first
-    const r1 = await fetch(`https://api.gbif.org/v1/species/search?vernacularName=${encodeURIComponent(query)}&rank=SPECIES&class=Aves&limit=5`);
-    const d1 = await r1.json();
-    let match = null;
-
-    if (d1.results && d1.results.length > 0) {
-      match = d1.results[0];
-    } else {
-      // Fallback: general name search
-      const r2 = await fetch(`https://api.gbif.org/v1/species/suggest?q=${encodeURIComponent(query)}&rank=SPECIES&limit=10`);
-      const d2 = await r2.json();
-      // Filter to birds (class Aves)
-      match = d2.find(s => s.class === 'Aves') || null;
-    }
+    // Search GBIF by name, filtered strictly to birds (class=Aves, rank=SPECIES)
+    const r = await fetch(`https://api.gbif.org/v1/species/search?q=${encodeURIComponent(query)}&class=Aves&rank=SPECIES&limit=5`);
+    const d = await r.json();
+    const match = d.results && d.results.length > 0 ? d.results[0] : null;
 
     if (match) {
       const sciName = match.canonicalName || match.scientificName || '';
-      // Try to get Dutch vernacular name from GBIF vernacular names
-      let dutchName = query;
-      try {
-        const r3 = await fetch(`https://api.gbif.org/v1/species/${match.key}/vernacularNames?limit=20`);
-        const d3 = await r3.json();
-        const nl = d3.results && d3.results.find(v => v.language === 'nld' || v.language === 'dut');
-        if (nl) dutchName = nl.vernacularName;
-      } catch(_) {}
 
-      document.getElementById('manualAddNl').textContent = dutchName;
+      document.getElementById('manualAddNl').textContent = query;
       document.getElementById('manualAddSci').textContent = sciName;
-      document.getElementById('manualAddNlInput').value = dutchName;
+      document.getElementById('manualAddNlInput').value = query;
       document.getElementById('manualAddSciInput').value = sciName;
       document.getElementById('manualAddStatus').textContent = 'Gevonden via GBIF:';
       document.getElementById('manualAddResult').style.display = 'block';
