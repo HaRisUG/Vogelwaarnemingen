@@ -355,9 +355,13 @@
   }
   .btn-gps:active { opacity: 0.7; }
 
+  .manual-add-row {
+    padding: 8px 12px 4px;
+    text-align: center;
+  }
   .btn-manual-add {
     display: inline-block;
-    margin-top: 10px;
+    margin-top: 4px;
     background: rgba(139,195,74,0.15);
     border: 1px solid rgba(139,195,74,0.4);
     color: var(--sage);
@@ -752,7 +756,8 @@ const BIRDS = ALL_BIRDS.filter(b => {
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let lists = JSON.parse(localStorage.getItem('vw_lists') || '["Jaarlijst","Vakantielijst","Projectlijst"]');
 let activeList = localStorage.getItem('vw_activeList') || lists[0];
-let sightings = []; // loaded from Supabase
+let sightings = []; // loaded from Supabase (capped at 50 for display)
+let allSpeciesNames = []; // all unique species names for active list (no cap, for counting)
 let pendingQueue = JSON.parse(localStorage.getItem('vw_pending') || '[]'); // offline queue
 let filteredBirds = [...BIRDS];
 let isOnline = navigator.onLine;
@@ -785,14 +790,19 @@ function updatePendingBadge() {
 async function loadSightings() {
   try {
     setStatus('syncing', 'Laden...');
+    // Fetch recent sightings for display (capped for performance)
     const data = await sbFetch(`waarnemingen?lijst=eq.${encodeURIComponent(activeList)}&order=tijdstip.desc&limit=50`);
     sightings = data || [];
+    // Fetch ALL species names for this list separately (no cap) for accurate counting
+    const allData = await sbFetch(`waarnemingen?select=naam&lijst=eq.${encodeURIComponent(activeList)}`);
+    allSpeciesNames = allData ? [...new Set(allData.map(d => d.naam))] : [];
     setStatus('online', 'Gesynchroniseerd');
     isOnline = true;
   } catch (e) {
     setStatus('offline', 'Offline — opslaan lokaal');
     isOnline = false;
     sightings = [];
+    allSpeciesNames = [];
   }
   renderSightings();
   updatePendingBadge();
@@ -853,8 +863,7 @@ async function flushPendingQueue() {
 // ─── SPECIES COUNT ────────────────────────────────────────────────────────────
 function updateSpeciesCount() {
   const pendingNames = pendingQueue.filter(p => p.list === activeList).map(p => p.nl);
-  const remoteNames = sightings.map(s => s.naam);
-  const unique = new Set([...remoteNames, ...pendingNames]);
+  const unique = new Set([...allSpeciesNames, ...pendingNames]);
   const count = unique.size;
   const pill = document.getElementById('speciesCountPill');
   const row = document.getElementById('speciesCountRow');
@@ -890,9 +899,13 @@ function filterBirds() {
 
 function renderBirdList() {
   const el = document.getElementById('birdList');
+  const q = document.getElementById('searchInput').value.trim();
+  const manualBtn = q
+    ? `<div class="manual-add-row"><button class="btn-manual-add" onclick="openManualAddModal('${q.replace(/'/g,"\\'")}')">"${q}" handmatig toevoegen</button></div>`
+    : '';
+
   if (filteredBirds.length === 0) {
-    const q = document.getElementById('searchInput').value.trim();
-    el.innerHTML = `<div class="no-results">Geen vogels gevonden${q ? `<br><button class="btn-manual-add" onclick="openManualAddModal('${q.replace(/'/g,"\\'")}')">${q} handmatig toevoegen</button>` : ''}</div>`;
+    el.innerHTML = `<div class="no-results">Geen vogels gevonden</div>${manualBtn}`;
     return;
   }
   el.innerHTML = filteredBirds.slice(0, 60).map(b => `
@@ -904,7 +917,7 @@ function renderBirdList() {
       </div>
       <button class="bird-log-btn">+ Log</button>
     </div>
-  `).join('');
+  `).join('') + manualBtn;
 }
 
 function renderSightings() {
@@ -1108,24 +1121,24 @@ function confirmLogDetails() {
 
 async function finishLog(entry) {
   // Check if this is a new species on this list (before adding to queue)
-  const alreadyInSightings = sightings.some(s => s.naam === entry.nl);
+  const alreadyInRemote = allSpeciesNames.includes(entry.nl);
   const alreadyInPending = pendingQueue.some(p => p.nl === entry.nl && p.list === entry.list);
-  const isNewSpecies = !alreadyInSightings && !alreadyInPending;
+  const isNewSpecies = !alreadyInRemote && !alreadyInPending;
 
   // Show immediately in UI
   pendingQueue.push(entry);
   saveLocal();
   updatePendingBadge();
   renderSightings();
-  updateSpeciesCount();
 
   if (isNewSpecies) {
-    // Count unique species including the one just added
-    const pendingNames = pendingQueue.filter(p => p.list === entry.list).map(p => p.nl);
-    const remoteNames = sightings.filter(s => s.lijst === entry.list || entry.list === activeList).map(s => s.naam);
-    const newCount = new Set([...remoteNames, ...pendingNames]).size;
+    // Add to local cache so count is correct instantly (before Supabase reload)
+    allSpeciesNames.push(entry.nl);
+    updateSpeciesCount();
+    const newCount = new Set([...allSpeciesNames, ...pendingQueue.filter(p => p.list === entry.list).map(p => p.nl)]).size;
     showToast(`🎉 ${entry.nl} — #${newCount} op je ${entry.list}!`);
   } else {
+    updateSpeciesCount();
     showToast(`✓ ${entry.nl} gelogd${entry.lat ? ' 📍' : ''}`);
   }
 
