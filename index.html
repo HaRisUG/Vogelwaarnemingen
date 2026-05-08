@@ -758,6 +758,7 @@ let lists = JSON.parse(localStorage.getItem('vw_lists') || '["Jaarlijst","Vakant
 let activeList = localStorage.getItem('vw_activeList') || lists[0];
 let sightings = []; // loaded from Supabase (capped at 50 for display)
 let allSpeciesNames = []; // all unique species names for active list (no cap, for counting)
+let jaarlijstSpecies = new Set(); // species already on "Jaarlijst", for cross-add check
 let pendingQueue = JSON.parse(localStorage.getItem('vw_pending') || '[]'); // offline queue
 let filteredBirds = [...BIRDS];
 let isOnline = navigator.onLine;
@@ -787,6 +788,15 @@ function updatePendingBadge() {
 }
 
 // ─── SUPABASE OPERATIONS ─────────────────────────────────────────────────────
+async function loadJaarlijstSpecies() {
+  try {
+    const data = await sbFetch(`waarnemingen?select=naam&lijst=eq.Jaarlijst`);
+    jaarlijstSpecies = new Set(data ? data.map(d => d.naam) : []);
+  } catch(e) {
+    // keep existing cache on error
+  }
+}
+
 async function loadSightings() {
   try {
     setStatus('syncing', 'Laden...');
@@ -1142,6 +1152,29 @@ async function finishLog(entry) {
     showToast(`✓ ${entry.nl} gelogd${entry.lat ? ' 📍' : ''}`);
   }
 
+  // Cross-add to Jaarlijst if logged to a different list and bird is new there
+  const crossAddToJaar = entry.list !== 'Jaarlijst'
+    && !jaarlijstSpecies.has(entry.nl)
+    && !pendingQueue.some(p => p.nl === entry.nl && p.list === 'Jaarlijst');
+
+  if (crossAddToJaar) {
+    const jaarEntry = { ...entry, list: 'Jaarlijst' };
+    jaarlijstSpecies.add(entry.nl); // update cache immediately
+    pendingQueue.push(jaarEntry);
+    saveLocal();
+    // Save to Supabase in background
+    saveSighting(jaarEntry).then(ok => {
+      if (ok) {
+        pendingQueue = pendingQueue.filter(p => p !== jaarEntry);
+        saveLocal();
+        updatePendingBadge();
+        loadJaarlijstSpecies();
+      }
+    });
+    // Show a follow-up toast after a short delay so it doesn't overlap
+    setTimeout(() => showToast(`📋 Ook toegevoegd aan Jaarlijst!`), 2000);
+  }
+
   // Try to save to Supabase
   const ok = await saveSighting(entry);
   if (ok) {
@@ -1315,6 +1348,7 @@ if ('serviceWorker' in navigator) {
 renderListSelect();
 renderBirdList();
 loadSightings();
+loadJaarlijstSpecies();
 if (pendingQueue.length > 0 && navigator.onLine) flushPendingQueue();
 </script>
 </body>
